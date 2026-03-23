@@ -18,3 +18,11 @@ __pycache__/
 # IDEs
 .vscode/
 .idea/
+
+# Logs and databases
+*.log
+*.sqlite3
+
+# data, reports and so on
+data/
+reports/
