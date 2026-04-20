@@ -17,7 +17,7 @@ import matplotlib.gridspec as gridspec
 from matplotlib.ticker import MaxNLocator
 from scipy import stats
 from numpy.linalg import solve
-from config import PROCESSED_DIR, FIGURES_DIR, TRAIN_RATIO, VAL_RATIO
+from .config import PROCESSED_DIR, FIGURES_DIR, TRAIN_RATIO, VAL_RATIO
 from statsmodels.tsa.stattools import adfuller, acf, pacf
 
 os.makedirs(FIGURES_DIR, exist_ok=True)

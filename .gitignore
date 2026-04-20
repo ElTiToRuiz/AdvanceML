@@ -23,6 +23,9 @@ __pycache__/
 *.log
 *.sqlite3
 
-# data, reports and so on
+# data, reports and so on not needed in the repository
 data/
 reports/
+*.docx
+*.pdf
+scripts/

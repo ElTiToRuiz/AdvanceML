@@ -10,7 +10,7 @@
 import os
 import numpy as np
 import pandas as pd
-from config import TICKERS, RAW_DIR, PROCESSED_DIR, TRAIN_RATIO, VAL_RATIO
+from .config import TICKERS, RAW_DIR, PROCESSED_DIR, TRAIN_RATIO, VAL_RATIO
 
 os.makedirs(PROCESSED_DIR, exist_ok=True)
 
