@@ -15,7 +15,7 @@ END_DATE   = "2026-03-01"
 
 RAW_DIR       = "data/raw"
 PROCESSED_DIR = "data/processed"
-FIGURES_DIR   = "reports"
+FIGURES_DIR   = "reports/activity1"
 
 TRAIN_RATIO = 0.70
 VAL_RATIO   = 0.15
