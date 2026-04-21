@@ -180,7 +180,7 @@ def chart_return_distribution(df: pd.DataFrame) -> None:
 # ── Chart 4. Missing-value heatmap (year × asset) ────────────────────────────
 
 def chart_missing_heatmap(df_nan: pd.DataFrame) -> None:
-    price_cols = [f"{t}_ret" for t in TICKERS]
+    price_cols = [f"{t.lstrip('^')}_ret" for t in TICKERS]
     miss = df_nan[price_cols].isna()
     miss = miss.assign(year=df_nan.index.year)
     pct = miss.groupby("year").mean() * 100
@@ -215,7 +215,7 @@ def chart_missing_heatmap(df_nan: pd.DataFrame) -> None:
 # ── Chart 5. Cross-asset return correlation ──────────────────────────────────
 
 def chart_correlation(df: pd.DataFrame) -> None:
-    cols = [f"{t}_ret" for t in TICKERS]
+    cols = [f"{t.lstrip('^')}_ret" for t in TICKERS]
     corr = df[cols].corr()
     corr.columns = [c.replace("_ret", "") for c in corr.columns]
     corr.index = corr.columns
@@ -307,43 +307,27 @@ def chart_regime_timeline(df: pd.DataFrame) -> None:
     _save(fig, "graph07_regime_timeline.png")
 
 
-# ── Chart 8. VIX behaviour per regime + per-feature mean heatmap ─────────────
+# ── Chart 8. Per-regime mean of every feature (z-scored heatmap) ─────────────
 
 def chart_vix_per_regime(df: pd.DataFrame) -> None:
-    vix_col = "VIX_ret" if "VIX_ret" in df.columns else "^VIX_ret"
-    if vix_col not in df.columns:
-        return
-
-    fig, axes = plt.subplots(1, 2, figsize=(13, 4.8))
-
-    data = [df.loc[df["regime"] == r, vix_col].dropna() * 100 for r in REGIME_ORDER]
-    bp = axes[0].boxplot(data, labels=REGIME_ORDER, patch_artist=True,
-                         showfliers=False, widths=0.6,
-                         medianprops={"color": "black", "linewidth": 1.4})
-    for patch, r in zip(bp["boxes"], REGIME_ORDER):
-        patch.set_facecolor(REGIME_COLORS[r])
-        patch.set_alpha(0.78)
-    axes[0].axhline(0, color="black", linewidth=0.7, linestyle="--", alpha=0.6)
-    axes[0].set_title("Today's VIX percentage change conditioned on tomorrow's regime")
-    axes[0].set_ylabel("VIX daily change (%)")
+    fig, ax = plt.subplots(figsize=(9, 4.2))
 
     numeric = df.select_dtypes(include=[np.number])
     means = numeric.groupby(df["regime"]).mean().reindex(REGIME_ORDER)
     means_norm = (means - means.mean()) / (means.std() + 1e-12)
 
-    im = axes[1].imshow(means_norm.values, aspect="auto", cmap="RdBu_r", vmin=-2, vmax=2)
-    axes[1].set_xticks(range(means_norm.shape[1]))
-    axes[1].set_xticklabels(means_norm.columns, rotation=45, ha="right", fontsize=7.5)
-    axes[1].set_yticks(range(len(REGIME_ORDER)))
-    axes[1].set_yticklabels(REGIME_ORDER)
-    axes[1].set_title("Per-regime mean of every feature, z-scored across regimes")
-    axes[1].grid(False)
-    cbar = plt.colorbar(im, ax=axes[1], label="z-score", pad=0.02)
+    im = ax.imshow(means_norm.values, aspect="auto", cmap="RdBu_r", vmin=-2, vmax=2)
+    ax.set_xticks(range(means_norm.shape[1]))
+    ax.set_xticklabels(means_norm.columns, rotation=45, ha="right", fontsize=8)
+    ax.set_yticks(range(len(REGIME_ORDER)))
+    ax.set_yticklabels(REGIME_ORDER)
+    ax.grid(False)
+    cbar = plt.colorbar(im, ax=ax, label="z-score", pad=0.02)
     cbar.outline.set_visible(False)
 
-    fig.suptitle(
-        "Graph 8. The volatility index is the single strongest separator of the four classes",
-        fontsize=11.5, y=1.02,
+    ax.set_title(
+        "Graph 8. Per-regime mean of every feature, z-scored across regimes",
+        fontsize=11.5,
     )
     fig.tight_layout()
     _save(fig, "graph08_vix_per_regime.png")
@@ -352,9 +336,7 @@ def chart_vix_per_regime(df: pd.DataFrame) -> None:
 # ── Chart 9. SPY vs VIX scatter coloured by regime (separability check) ──────
 
 def chart_spy_vix_scatter(df: pd.DataFrame) -> None:
-    vix_col = "VIX_ret" if "VIX_ret" in df.columns else "^VIX_ret"
-    if vix_col not in df.columns:
-        return
+    vix_col = "VIX_ret"
 
     fig, ax = plt.subplots(figsize=(8.5, 6))
 

@@ -91,8 +91,9 @@ def engineer_features(prices: pd.DataFrame) -> pd.DataFrame:
     out["SPY_price"] = prices["SPY"]
 
     # Log returns (NaN propagates wherever the price is missing — by design)
+    # Strip the `^` from index tickers so column names stay clean (VIX_ret, TNX_ret)
     for tkr in TICKERS:
-        out[f"{tkr}_ret"] = np.log(prices[tkr] / prices[tkr].shift(1))
+        out[f"{tkr.lstrip('^')}_ret"] = np.log(prices[tkr] / prices[tkr].shift(1))
 
     # Yield change for ^TNX (handled separately because it's not a price)
     out["TNX_chg"] = prices["^TNX"].diff()

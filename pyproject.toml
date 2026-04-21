@@ -13,3 +13,8 @@ dependencies = [
     "statsmodels>=0.14.6",
     "yfinance>=1.2.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pypdf>=6.10.2",
+]
