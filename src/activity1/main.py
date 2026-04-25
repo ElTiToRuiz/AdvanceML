@@ -1,24 +1,30 @@
-"""
-Activity 1 — EDA pipeline entry point.
+# main.py
+# ─────────────────────────────────────────────────────────────────────────────
+# Activity 1 orchestrator.
+#
+# Full pipeline in order:
+#   1. data.download           → fetch SPY, IEF, ^TNX from Yahoo Finance
+#   2. data.clean              → merge, impute, feature engineer, split
+#   3. eda.plots               → generate the 7 EDA charts
+#   4. pipelines.run_all       → fit + evaluate every model
+#                                (baselines + SARIMAX + LSTM + Chronos-2)
+#
+# Run from project root:
+#     python main.py 1
+# or directly:
+#     python -m src.activity1.main
+# ─────────────────────────────────────────────────────────────────────────────
 
-Runs the three steps in order:
-    1. download_data → fetches SPY, IEF, ^TNX from Yahoo Finance
-    2. clean_data    → merges, imputes, engineers features, splits
-    3. eda_plots     → generates the 7 EDA charts
-
-Run from project root:
-    python -m src.activity1.main
-or via the root dispatcher:
-    python main.py 1
-"""
-
-from . import download_data, clean_data, eda_plots
+from .data import download, clean
+from .eda  import plots as eda_plots
+from .pipelines import run_all
 
 
 def main() -> None:
-    download_data.main()
-    clean_data.main()
+    download.main()
+    clean.main()
     eda_plots.main()
+    run_all.main()
 
 
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
-# 03_eda_plots.py
+# plots.py
 # ─────────────────────────────────────────────────────────────────────────────
-# Generates all 7 EDA figures using the cleaned dataset from 02_clean_data.py
-# Figures saved to reports/figures/ as high-resolution PNGs
+# Generates the 7 EDA figures from the cleaned full_dataset.csv.
+# Figures saved to reports/activity1/ as high-resolution PNGs.
 #
-# Run:  python 03_eda_plots.py
-# Requires: pip install matplotlib scipy pandas numpy statsmodels
+# Run from project root:
+#     python -m src.activity1.eda.plots
 # ─────────────────────────────────────────────────────────────────────────────
 
 import os
@@ -16,9 +16,9 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.ticker import MaxNLocator
 from scipy import stats
-from numpy.linalg import solve
-from .config import PROCESSED_DIR, FIGURES_DIR, TRAIN_RATIO, VAL_RATIO
 from statsmodels.tsa.stattools import adfuller, acf, pacf
+
+from ..config import PROCESSED_DIR, FIGURES_DIR, TRAIN_RATIO, VAL_RATIO
 
 os.makedirs(FIGURES_DIR, exist_ok=True)
 
