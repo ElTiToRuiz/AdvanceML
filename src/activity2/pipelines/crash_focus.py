@@ -50,6 +50,7 @@ from ..config import (
 from ..data.loader import load_with_nans
 from ..evaluation.operational import (
     asymmetric_sample_weights, evaluate_at_threshold, find_operating_point,
+    backtest_summary, plot_equity_curve, simulate_exit_strategy,
 )
 from ..models.xgboost_clf import XGBoostModel
 from ..preprocessing.imputation import add_mnar_indicators, build_imputer
@@ -428,6 +429,61 @@ def run_threshold_and_pr(
     return df, winner_op, winner_det
 
 
+# ─── §4.5 — Backtest ─────────────────────────────────────────────────────────
+
+
+def run_backtest(winner_op: "OperatingPoint", winner_det, bundle: dict) -> dict:
+    """
+    Long-only "exit on crash signal" simulation:
+      decide at end of day t (using X_test row at t).
+      hold cash on day t+1 if P(crash next-day) >= threshold,
+      hold SPY on day t+1 otherwise.
+    """
+    print("\n— §4.5 Backtest —")
+
+    X_test = bundle["X_test"]
+    y_test = bundle["y_test"]
+
+    # The model predicts the regime of day t+1 from features at day t.
+    # The decision at index t is for the holding period that ends at t+1.
+    proba_test_crash = _detector_proba(winner_det, X_test, TARGET_CLASS)
+    signal_t = pd.Series(
+        (proba_test_crash >= winner_op.threshold).astype(int),
+        index=X_test.index, name="signal",
+    )
+
+    # SPY_ret in our processed dataset is the LOG RETURN ON DAY t.
+    # The decision at end of day t controls exposure to day t+1, so we
+    # align signal_t with the NEXT day's SPY return.
+    spy_ret_t = X_test["SPY_ret"]
+    aligned = pd.concat([
+        spy_ret_t.shift(-1).rename("spy_ret_next"),
+        signal_t,
+    ], axis=1).dropna()
+    bt = simulate_exit_strategy(aligned["spy_ret_next"], aligned["signal"])
+
+    plot_equity_curve(
+        bt, save_to=os.path.join(REPORT_CRASH_FOCUS_DIR, "equity_curve.png"),
+    )
+
+    summary = backtest_summary(
+        bt,
+        y_true_class=y_test.shift(-1).reindex(bt.index),
+        target_class=TARGET_CLASS,
+    )
+    pd.DataFrame([summary]).to_csv(
+        os.path.join(REPORT_CRASH_FOCUS_DIR, "backtest_summary.csv"), index=False,
+    )
+
+    print("  Backtest summary:")
+    for k, v in summary.items():
+        if isinstance(v, float):
+            print(f"    {k:22s}  {v:.4f}")
+        else:
+            print(f"    {k:22s}  {v}")
+    return summary
+
+
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 
@@ -444,8 +500,10 @@ def main() -> None:
     df_ops, winner_op, winner_det = run_threshold_and_pr(
         calibrated, asymmetric, binary, bundle,
     )
-    # §4.5 added in next task
-    return None
+    run_backtest(winner_op, winner_det, bundle)
+    print("\n" + "=" * 60)
+    print("Block E complete.")
+    print("=" * 60)
 
 
 if __name__ == "__main__":
