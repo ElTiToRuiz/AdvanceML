@@ -16,7 +16,7 @@ import pandas as pd
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import precision_recall_curve
 
-from .style import REGIME_COLORS, apply_style, regime_color
+from .style import PALETTE, REGIME_COLORS, apply_style, regime_color
 
 
 apply_style()
@@ -79,7 +79,8 @@ class CalibratedClassifierWrapper:
         return np.array(self.classes_)[np.argmax(proba, axis=1)]
 
     def predict_proba(self, X) -> np.ndarray:
-        return self._calibrator.predict_proba(X.values)
+        arr = X.values if hasattr(X, "values") else X
+        return self._calibrator.predict_proba(arr)
 
 
 def reliability_diagram(
@@ -153,9 +154,11 @@ def find_operating_point(
     Pick the threshold on `proba_class_val` that maximises
     target-class recall on val SUBJECT TO precision >= precision_floor.
 
-    If no threshold satisfies the precision floor, return the one that
-    gets closest to it (recall=0 fallback) so the pipeline doesn't crash
-    — the operating point is reported and the user can see we failed.
+    If no threshold satisfies the precision floor, fall back to the
+    threshold with the HIGHEST achievable precision (the one closest to
+    the floor we wanted). The returned `OperatingPoint.recall` will be
+    whatever recall that fallback threshold produces — it is NOT
+    guaranteed to be zero.
     """
     y_true_bin = (np.asarray(y_val) == target_class).astype(int)
     precision, recall, thresholds = precision_recall_curve(y_true_bin, proba_class_val)
@@ -218,7 +221,7 @@ def plot_pr_overlay(
     Overlay the PR curve of every detector on the same axes, and mark
     each detector's chosen operating point with a star.
     """
-    palette = ["#1F4E79", "#D97706", "#1A7A4A", "#6D28D9"]
+    palette = PALETTE[: len(series)]
     fig, ax = plt.subplots(figsize=(8, 6))
     for (name, y_bin, proba), color, op in zip(series, palette, operating_points):
         precision, recall, _ = precision_recall_curve(y_bin, proba)
@@ -280,6 +283,10 @@ def backtest_summary(
     s_strat = bt["strat_ret"]
     s_bh    = bt["spy_ret"]
 
+    # Note: cash-holding days are zero-return days that reduce the std
+    # of strat_ret, which can mechanically inflate `sharpe_strat`. This
+    # is the correct measure for a risk-off strategy but should be
+    # interpreted alongside max_drawdown, not in isolation.
     sharpe_strat = float(s_strat.mean() / s_strat.std() * annual_factor) if s_strat.std() > 0 else 0.0
     sharpe_bh    = float(s_bh.mean()    / s_bh.std()    * annual_factor) if s_bh.std()    > 0 else 0.0
 
