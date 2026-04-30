@@ -11,7 +11,7 @@ import os
 import pandas as pd
 import yfinance as yf
 
-from .config import END_DATE, RAW_DIR, START_DATE, TICKERS
+from ..config import END_DATE, RAW_DIR, START_DATE, TICKERS
 
 os.makedirs(RAW_DIR, exist_ok=True)
 
