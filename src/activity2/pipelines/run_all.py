@@ -22,6 +22,7 @@ from .compare_imputations import main as block_a
 from .compare_imbalance   import main as block_b
 from .tune_models         import main as block_c
 from .final_evaluation    import main as block_d
+from .crash_focus         import main as block_e
 
 
 def _git_commit() -> str:
@@ -68,7 +69,7 @@ def write_manifest() -> None:
 
 def main() -> None:
     print("\n" + "▓" * 60)
-    print("ACTIVITY 2 — full ML pipeline (A → B → C → D)")
+    print("ACTIVITY 2 — full ML pipeline (A → B → C → D → E)")
     print("▓" * 60)
     block_a()
     print()
@@ -77,6 +78,8 @@ def main() -> None:
     block_c()
     print()
     block_d()
+    print()
+    block_e()
     print()
     write_manifest()
     print("▓" * 60)
