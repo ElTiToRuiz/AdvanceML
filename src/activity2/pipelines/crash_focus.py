@@ -50,6 +50,7 @@ from ..evaluation.operational import (
 )
 from ..models.xgboost_clf import XGBoostModel
 from ..preprocessing.imputation import add_mnar_indicators, build_imputer
+from xgboost import XGBClassifier
 
 
 warnings.filterwarnings("ignore")
@@ -205,6 +206,102 @@ def run_asymmetric_retune(bundle: dict) -> XGBoostModel:
     return model
 
 
+# ─── §4.4 — Binary reframe ───────────────────────────────────────────────────
+
+
+class _BinaryCrashDetector:
+    """
+    Tiny wrapper that mimics the Classifier interface (proba, predict)
+    but is binary. classes_ is fixed to the strings 'not_crash', 'crash'.
+    """
+    name = "xgb_binary_crash"
+
+    def __init__(self, model: XGBClassifier):
+        self._model = model
+        self.classes_ = np.array(["not_crash", "crash"])
+
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        # XGBClassifier.predict_proba returns shape (n, 2) ordered by
+        # ascending class label (0 = not_crash, 1 = crash).
+        return self._model.predict_proba(X.values if hasattr(X, "values") else X)
+
+
+def run_binary_reframe(bundle: dict) -> _BinaryCrashDetector:
+    print("\n— §4.4 Binary reframe —")
+    X_tr, y_tr, X_va, y_va, X_te, y_te = _prepare_imputed_splits(bundle["winner_imp"])
+    y_tr_bin = (y_tr.astype(str) == TARGET_CLASS).astype(int).values
+    y_va_bin = (y_va.astype(str) == TARGET_CLASS).astype(int).values
+
+    n_pos = int(y_tr_bin.sum())
+    n_neg = int((1 - y_tr_bin).sum())
+    scale_pos_weight = n_neg / max(n_pos, 1)
+
+    history = []
+
+    def objective(trial):
+        params = {
+            "learning_rate":    trial.suggest_float("learning_rate",    *XGB_OPTUNA_RANGES["learning_rate"]),
+            "max_depth":        trial.suggest_int(  "max_depth",        *XGB_OPTUNA_RANGES["max_depth"]),
+            "n_estimators":     trial.suggest_int(  "n_estimators",     *XGB_OPTUNA_RANGES["n_estimators"]),
+            "subsample":        trial.suggest_float("subsample",        *XGB_OPTUNA_RANGES["subsample"]),
+            "colsample_bytree": trial.suggest_float("colsample_bytree", *XGB_OPTUNA_RANGES["colsample_bytree"]),
+            "reg_alpha":        trial.suggest_float("reg_alpha",        *XGB_OPTUNA_RANGES["reg_alpha"], log=True),
+            "reg_lambda":       trial.suggest_float("reg_lambda",       *XGB_OPTUNA_RANGES["reg_lambda"], log=True),
+        }
+        model = XGBClassifier(
+            **params,
+            objective="binary:logistic",
+            eval_metric="logloss",
+            tree_method="hist",
+            scale_pos_weight=scale_pos_weight,
+            random_state=RANDOM_SEED,
+            n_jobs=-1,
+        )
+        model.fit(X_tr.values, y_tr_bin)
+        proba_val_pos = model.predict_proba(X_va.values)[:, 1]
+        op = find_operating_point(
+            np.where(y_va_bin == 1, "crash", "not_crash"),
+            proba_val_pos,
+            target_class=TARGET_CLASS,
+            precision_floor=PRECISION_FLOOR_CRASH,
+            detector_name="binary",
+        )
+        score = op.recall if op.precision >= PRECISION_FLOOR_CRASH else 0.0
+        history.append({**params, "trial": trial.number,
+                        "val_recall_crash": op.recall,
+                        "val_precision_crash": op.precision,
+                        "score": score})
+        return score
+
+    study = optuna.create_study(
+        direction="maximize",
+        sampler=TPESampler(seed=RANDOM_SEED),
+        pruner=MedianPruner(),
+    )
+    study.optimize(objective, n_trials=CRASH_OPTUNA_TRIALS, show_progress_bar=False)
+    pd.DataFrame(history).to_csv(
+        os.path.join(REPORT_CRASH_FOCUS_DIR, "binary_optuna_history.csv"),
+        index=False,
+    )
+    best = study.best_params
+    print(f"  Binary best score (val recall_crash @ precision>=0.10): {study.best_value:.4f}")
+    print(f"  Best params: {best}")
+
+    final = XGBClassifier(
+        **best,
+        objective="binary:logistic",
+        eval_metric="logloss",
+        tree_method="hist",
+        scale_pos_weight=scale_pos_weight,
+        random_state=RANDOM_SEED,
+        n_jobs=-1,
+    )
+    final.fit(X_tr.values, y_tr_bin)
+    detector = _BinaryCrashDetector(final)
+    joblib.dump(detector, os.path.join(REPORT_CRASH_FOCUS_DIR, "crash_xgb_binary.joblib"))
+    return detector
+
+
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 
@@ -217,7 +314,8 @@ def main() -> None:
     bundle = _load_bundle()
     calibrated = run_calibration(bundle)
     asymmetric = run_asymmetric_retune(bundle)
-    # §4.3-§4.5 added in later tasks
+    binary    = run_binary_reframe(bundle)
+    # §4.3 and §4.5 added in later tasks
     return None
 
 
