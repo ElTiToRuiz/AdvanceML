@@ -48,3 +48,53 @@ REGIME_ORDER = ["crash", "correction", "normal", "rally"]
 TRAIN_RATIO = 0.70
 VAL_RATIO   = 0.15
 RANDOM_SEED = 42
+
+
+# ── Block A: imputation method list ──────────────────────────────────────────
+IMPUTATION_METHODS = ["mean", "median", "ffill", "linear", "knn", "mice"]
+
+
+# ── Block B: imbalance strategy list ─────────────────────────────────────────
+IMBALANCE_STRATEGIES = [
+    "untouched", "class_weight", "smote", "adasyn", "smote_enn", "rus", "threshold",
+]
+
+
+# ── Block C: model list and hyperparameter grids ────────────────────────────
+MODEL_NAMES = ["logreg", "random_forest", "xgboost"]
+
+
+# Note: sklearn 1.8 deprecated `penalty='l1'/'l2'` in favour of `l1_ratio`.
+# l1_ratio = 0.0 → pure L2,  l1_ratio = 1.0 → pure L1.
+LOGREG_GRID = {
+    "C":         [0.01, 0.1, 1.0, 10.0],
+    "l1_ratio":  [0.0, 1.0],
+}
+
+
+RF_GRID = {
+    "n_estimators":     [200, 400, 800],
+    "max_depth":        [None, 6, 10, 20],
+    "min_samples_leaf": [1, 2, 5, 10],
+    "max_features":     ["sqrt", "log2", 0.5],
+}
+RF_RANDOM_ITER = 50
+
+
+XGB_OPTUNA_TRIALS = 200
+XGB_OPTUNA_RANGES = {
+    "learning_rate":    (0.01, 0.30),
+    "max_depth":        (3, 10),
+    "n_estimators":     (200, 800),
+    "subsample":        (0.6, 1.0),
+    "colsample_bytree": (0.6, 1.0),
+    "reg_alpha":        (1e-3, 10.0),     # log scale
+    "reg_lambda":       (1e-3, 10.0),     # log scale
+}
+
+
+# ── Output paths under reports/activity2/ ───────────────────────────────────
+REPORT_PREPROCESSING_DIR = "reports/activity2/preprocessing"
+REPORT_MODELS_DIR        = "reports/activity2/models"
+REPORT_FINAL_DIR         = "reports/activity2/final"
+REPORT_SHAP_DIR          = "reports/activity2/shap"
