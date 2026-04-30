@@ -98,3 +98,19 @@ REPORT_PREPROCESSING_DIR = "reports/activity2/preprocessing"
 REPORT_MODELS_DIR        = "reports/activity2/models"
 REPORT_FINAL_DIR         = "reports/activity2/final"
 REPORT_SHAP_DIR          = "reports/activity2/shap"
+
+
+# ── Block E: crash-focused analysis ──────────────────────────────────────────
+# Operating point: at least PRECISION_FLOOR_CRASH of "crash" predictions
+# must be real crashes for the threshold to be acceptable.
+PRECISION_FLOOR_CRASH = 0.10
+
+# Per-class sample weights for the asymmetric re-tuning. crash gets a 10x
+# penalty for being missed, correction 3x, rally 2x, normal 1x.
+ASYMMETRIC_COST_WEIGHTS = {"crash": 10.0, "correction": 3.0, "rally": 2.0, "normal": 1.0}
+
+# Optuna budget for the asymmetric re-tune (smaller than Phase 2's 200 because
+# the parameter region is already known from Block C).
+CRASH_OPTUNA_TRIALS = 100
+
+REPORT_CRASH_FOCUS_DIR = "reports/activity2/crash_focus"
