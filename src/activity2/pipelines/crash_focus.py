@@ -25,7 +25,7 @@ from ..config import (
     REPORT_CRASH_FOCUS_DIR,
     REPORT_MODELS_DIR,
 )
-from ..evaluation.metrics import compute_all, confusion, per_class_pr
+from ..evaluation.metrics import compute_all
 from ..evaluation.operational import (
     CalibratedClassifierWrapper,
     OperatingPoint,
@@ -406,7 +406,7 @@ def run_threshold_and_pr(
     winner_op, winner_det, _ = best
     proba_test_crash = _detector_proba(winner_det, X_test, TARGET_CLASS)
     pred = np.where(proba_test_crash >= winner_op.threshold, TARGET_CLASS, "not_crash")
-    if winner_det is binary:
+    if winner_op.detector == "binary_xgb":
         cm_df = pd.crosstab(
             pd.Series(y_test_str, name="actual"),
             pd.Series(pred,        name="predicted"),
