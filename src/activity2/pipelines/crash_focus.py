@@ -25,8 +25,11 @@ from ..config import (
     REPORT_CRASH_FOCUS_DIR,
     REPORT_MODELS_DIR,
 )
+from ..evaluation.metrics import compute_all, confusion, per_class_pr
 from ..evaluation.operational import (
     CalibratedClassifierWrapper,
+    OperatingPoint,
+    plot_pr_overlay,
     plot_reliability,
     reliability_diagram,
 )
@@ -302,6 +305,129 @@ def run_binary_reframe(bundle: dict) -> _BinaryCrashDetector:
     return detector
 
 
+# ─── §4.3 — Threshold tuning + PR overlay ────────────────────────────────────
+
+
+def _detector_proba(detector, X, target_class: str) -> np.ndarray:
+    """Return P(target_class) for any of our three detector types."""
+    proba = detector.predict_proba(X)
+    classes = list(detector.classes_)
+    return proba[:, classes.index(target_class)]
+
+
+def run_threshold_and_pr(
+    calibrated, asymmetric, binary, bundle: dict,
+) -> tuple[pd.DataFrame, OperatingPoint, object]:
+    """
+    For each of the 3 detectors:
+      - find the val threshold that maximises recall_crash s.t.
+        precision_crash >= floor
+      - apply to test, record metrics
+    Then plot all 3 PR curves on the same figure with operating points,
+    save operating_points.csv, and return (df, winner_op, winner_detector).
+    """
+    print("\n— §4.3 Threshold tuning + PR curve —")
+    X_val, y_val = bundle["X_val"], bundle["y_val"]
+    X_test, y_test = bundle["X_test"], bundle["y_test"]
+    y_val_str  = y_val.astype(str).values
+    y_test_str = y_test.astype(str).values
+
+    detectors = [
+        ("calibrated_xgb", calibrated),
+        ("asymmetric_xgb", asymmetric),
+        ("binary_xgb",     binary),
+    ]
+
+    rows = []
+    series_for_plot = []
+    operating_points = []
+    best = (None, None, -1.0)  # (op, detector, recall_on_test)
+
+    for name, det in detectors:
+        proba_val_crash  = _detector_proba(det, X_val,  TARGET_CLASS)
+        proba_test_crash = _detector_proba(det, X_test, TARGET_CLASS)
+
+        # 1) threshold from val
+        op = find_operating_point(
+            y_val_str, proba_val_crash,
+            target_class=TARGET_CLASS,
+            precision_floor=PRECISION_FLOOR_CRASH,
+            detector_name=name,
+        )
+        operating_points.append(op)
+
+        # 2) apply that threshold to test
+        test_metrics = evaluate_at_threshold(
+            y_test_str, proba_test_crash,
+            threshold=op.threshold,
+            target_class=TARGET_CLASS,
+        )
+
+        rows.append({
+            "detector":              name,
+            "threshold":             op.threshold,
+            "val_recall_crash":      op.recall,
+            "val_precision_crash":   op.precision,
+            "val_n_alarms":          op.n_alarms,
+            "test_recall_crash":     test_metrics["recall"],
+            "test_precision_crash":  test_metrics["precision"],
+            "test_n_alarms":         test_metrics["n_alarms"],
+        })
+
+        # collect series for PR overlay (test set, binary view of crash)
+        y_test_bin = (y_test_str == TARGET_CLASS).astype(int)
+        series_for_plot.append((name, y_test_bin, proba_test_crash))
+
+        if test_metrics["recall"] > best[2] and test_metrics["precision"] >= PRECISION_FLOOR_CRASH:
+            best = (op, det, test_metrics["recall"])
+
+    # If no detector hit precision floor on test, fall back to the
+    # detector with the highest test recall (we still pick a winner so
+    # the backtest can run).
+    if best[1] is None:
+        idx = int(np.argmax([r["test_recall_crash"] for r in rows]))
+        winner_row = rows[idx]
+        winner_op = operating_points[idx]
+        winner_det = detectors[idx][1]
+        best = (winner_op, winner_det, winner_row["test_recall_crash"])
+        print(f"  WARNING: no detector met precision floor on test. "
+              f"Falling back to highest-recall detector: {winner_op.detector}")
+
+    plot_pr_overlay(
+        series_for_plot, operating_points, target_class=TARGET_CLASS,
+        save_to=os.path.join(REPORT_CRASH_FOCUS_DIR, "crash_pr_curve.png"),
+    )
+
+    df = pd.DataFrame(rows)
+    df.to_csv(os.path.join(REPORT_CRASH_FOCUS_DIR, "operating_points.csv"), index=False)
+    print(df.round(4).to_string(index=False))
+
+    # Save full per-class metrics of the winner at its operating point
+    winner_op, winner_det, _ = best
+    proba_test_crash = _detector_proba(winner_det, X_test, TARGET_CLASS)
+    pred = np.where(proba_test_crash >= winner_op.threshold, TARGET_CLASS, "not_crash")
+    if winner_det is binary:
+        cm_df = pd.crosstab(
+            pd.Series(y_test_str, name="actual"),
+            pd.Series(pred,        name="predicted"),
+        )
+        cm_df.to_csv(os.path.join(REPORT_CRASH_FOCUS_DIR, "winner_confusion_binary.csv"))
+    else:
+        full_proba = winner_det.predict_proba(X_test)
+        classes = list(winner_det.classes_)
+        argmax_pred = np.array(classes)[np.argmax(full_proba, axis=1)]
+        crash_mask  = proba_test_crash >= winner_op.threshold
+        final_pred  = np.where(crash_mask, TARGET_CLASS, argmax_pred)
+        full_metrics = compute_all(y_test_str, final_pred)
+        pd.DataFrame([full_metrics]).to_csv(
+            os.path.join(REPORT_CRASH_FOCUS_DIR, "crash_focus_metrics.csv"), index=False,
+        )
+
+    print(f"\n  ► Block E winner: {winner_op.detector}  "
+          f"(test recall_crash = {best[2]:.4f}, threshold = {winner_op.threshold:.3f})")
+    return df, winner_op, winner_det
+
+
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 
@@ -315,7 +441,10 @@ def main() -> None:
     calibrated = run_calibration(bundle)
     asymmetric = run_asymmetric_retune(bundle)
     binary    = run_binary_reframe(bundle)
-    # §4.3 and §4.5 added in later tasks
+    df_ops, winner_op, winner_det = run_threshold_and_pr(
+        calibrated, asymmetric, binary, bundle,
+    )
+    # §4.5 added in next task
     return None
 
 
