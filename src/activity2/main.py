@@ -1,24 +1,30 @@
-"""
-Activity 2 — pipeline entry point.
+# main.py
+# ─────────────────────────────────────────────────────────────────────────────
+# Activity 2 orchestrator.
+#
+# Full pipeline in order:
+#   1. data.download           → fetch SPY, IEF, ^TNX, ^VIX, GLD, UUP, USO
+#   2. data.clean              → outer-merge, regime label, NaN-preserving
+#                                + ffill-imputed datasets, sequential split
+#   3. eda.plots               → 11 EDA charts
+#   4. pipelines.run_all       → Block A → B → C → D
+#
+# Run from project root:
+#     python main.py 2
+# or directly:
+#     python -m src.activity2.main
+# ─────────────────────────────────────────────────────────────────────────────
 
-Runs the three steps in order:
-    1. download_data → fetches SPY, IEF, ^TNX, ^VIX, GLD, UUP, USO from Yahoo Finance
-    2. clean_data    → outer-merge, regime label, train/val/test split (NaNs preserved)
-    3. eda_plots     → 7 charts tailored to imbalance / imputation / multi-class
-
-Run from project root:
-    python -m src.activity2.main
-or via the root dispatcher:
-    python main.py 2
-"""
-
-from . import clean_data, download_data, eda_plots
+from .data import download, clean
+from .eda  import plots as eda_plots
+from .pipelines import run_all
 
 
 def main() -> None:
-    download_data.main()
-    clean_data.main()
+    download.main()
+    clean.main()
     eda_plots.main()
+    run_all.main()
 
 
 if __name__ == "__main__":
