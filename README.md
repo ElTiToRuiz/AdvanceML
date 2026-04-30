@@ -24,11 +24,6 @@ project/
 ├── pyproject.toml                 # uv-managed dependencies
 ├── uv.lock                        # locked dependency versions
 │
-├── docs/
-│   └── superpowers/
-│       ├── specs/                 # design specs (one per phase)
-│       └── plans/                 # implementation plans (one per phase)
-│
 ├── src/
 │   ├── activity1/                 # ── Time-series forecasting (regression) ──
 │   │   ├── config.py

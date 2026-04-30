@@ -46,5 +46,6 @@ scripts/
 *.pdf
 class/
 
-# ─── Claude Code session metadata ───────────────────────────────────────────
+# ─── Claude Code session metadata + internal planning artifacts ─────────────
 .claude/
+docs/
