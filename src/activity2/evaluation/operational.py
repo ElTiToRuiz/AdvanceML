@@ -14,9 +14,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.calibration import CalibratedClassifierCV
+from sklearn.frozen import FrozenEstimator
 from sklearn.metrics import precision_recall_curve
 
-from .style import PALETTE, REGIME_COLORS, apply_style, regime_color
+from .style import AMBER, BLUE, GREEN, PURPLE, REGIME_COLORS, apply_style, regime_color
 
 
 apply_style()
@@ -53,8 +54,9 @@ class CalibratedClassifierWrapper:
         self.name = f"{base_classifier.name}_calibrated"
         self.base = base_classifier
         # CalibratedClassifierCV needs an sklearn-style estimator. We
-        # pass the underlying booster (the actual sklearn object), not
-        # our wrapper.
+        # pass the underlying booster wrapped in FrozenEstimator (sklearn
+        # 1.8 replacement for the deprecated cv='prefit' option), so the
+        # calibrator only fits the Platt-scaling layer on top.
         underlying = getattr(base_classifier, "booster", base_classifier._model)
         # XGBoostModel uses LabelEncoder; we need the integer-encoded y
         # for that branch but original strings for sklearn estimators.
@@ -62,8 +64,11 @@ class CalibratedClassifierWrapper:
             y_for_cal = base_classifier._encoder.transform(y_val)
         else:
             y_for_cal = y_val.values if hasattr(y_val, "values") else y_val
+        # sklearn 1.8 removed cv='prefit'. The replacement pattern is to wrap
+        # the already-fitted estimator in FrozenEstimator, which tells the
+        # calibrator to skip refitting on the calibration set.
         self._calibrator = CalibratedClassifierCV(
-            estimator=underlying, method="sigmoid", cv="prefit",
+            estimator=FrozenEstimator(underlying), method="sigmoid",
         ).fit(X_val.values, y_for_cal)
         # Recover string class labels (CalibratedClassifierCV.classes_ is ints
         # when the base estimator was trained on encoded labels).
@@ -221,7 +226,7 @@ def plot_pr_overlay(
     Overlay the PR curve of every detector on the same axes, and mark
     each detector's chosen operating point with a star.
     """
-    palette = PALETTE[: len(series)]
+    palette = [BLUE, AMBER, GREEN, PURPLE][: len(series)]
     fig, ax = plt.subplots(figsize=(8, 6))
     for (name, y_bin, proba), color, op in zip(series, palette, operating_points):
         precision, recall, _ = precision_recall_curve(y_bin, proba)
